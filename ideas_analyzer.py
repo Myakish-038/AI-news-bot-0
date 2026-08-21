@@ -76,8 +76,7 @@ async def analyze_business_ideas(news_items: List[Dict]) -> str:
         # GigaChat не поддерживает асинхронные вызовы, используем to_thread
         response = await asyncio.to_thread(
             client.chat,
-            prompt,
-            model="GigaChat-3.5-Ultra"
+            prompt
         )
 
         result = response.choices[0].message.content.strip()
