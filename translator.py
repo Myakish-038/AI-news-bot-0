@@ -29,7 +29,7 @@ def get_client() -> GigaChat:
             credentials=config.GIGACHAT_CREDENTIALS,
             scope="GIGACHAT_API_PERS",
             verify_ssl_certs=False,
-            model="GigaChat-3.5-Ultra"  # или GigaChat-3.5-Lite
+            model="GigaChat-3.5-Ultra"
         )
     return client
 
@@ -60,8 +60,7 @@ async def translate_and_summarize(news_item: Dict) -> Dict:
         # GigaChat не поддерживает асинхронные вызовы, поэтому используем to_thread
         response = await asyncio.to_thread(
             gigachat_client.chat,
-            prompt,
-            model="GigaChat-3.5-Ultra"
+            prompt
         )
 
         result = response.choices[0].message.content.strip()
