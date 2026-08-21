@@ -46,16 +46,19 @@ async def send_daily_digest():
         if news_success:
             print(f"News sent: {len(news_items)} items")
 
-        # 2. Analyze and send BUSINESS IDEAS via second bot
-        print("Analyzing business ideas...")
-        ideas_message = await analyze_business_ideas(news_items)
-        if ideas_message:
-            print("Sending business ideas...")
-            ideas_success = await send_business_ideas(ideas_message)
-            if ideas_success:
-                print("Business ideas sent!")
+        # 2. Analyze and send BUSINESS IDEAS via second bot (if GigaChat is configured)
+        if config.GIGACHAT_CREDENTIALS:
+            print("Analyzing business ideas...")
+            ideas_message = await analyze_business_ideas(news_items)
+            if ideas_message:
+                print("Sending business ideas...")
+                ideas_success = await send_business_ideas(ideas_message)
+                if ideas_success:
+                    print("Business ideas sent!")
+            else:
+                print("No business ideas generated")
         else:
-            print("No business ideas generated")
+            print("GigaChat not configured - skipping business ideas")
 
         # Cleanup old records
         await database.cleanup_old_news(days=30)
@@ -75,15 +78,12 @@ async def run_with_scheduler():
         print("ERROR: TELEGRAM_NEWS_BOT_TOKEN not set")
         sys.exit(1)
 
-    if not config.TELEGRAM_IDEAS_BOT_TOKEN:
-        print("WARNING: TELEGRAM_IDEAS_BOT_TOKEN not set - ideas won't be sent")
-
     if not config.TELEGRAM_CHAT_ID:
         print("ERROR: TELEGRAM_CHAT_ID not set")
         sys.exit(1)
 
-    if not config.OPENAI_API_KEY:
-        print("WARNING: OPENAI_API_KEY not set - translations will be skipped")
+    if not config.GIGACHAT_CREDENTIALS:
+        print("WARNING: GIGACHAT_CREDENTIALS not set - translations and ideas will be skipped")
 
     # Initialize database
     await database.init_db()
@@ -213,6 +213,10 @@ def main():
         asyncio.run(run_bot_only())
     else:
         asyncio.run(run_with_scheduler())
+
+
+if __name__ == "__main__":
+    main()
 
 
 if __name__ == "__main__":
