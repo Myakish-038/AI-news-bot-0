@@ -1,15 +1,14 @@
 """Business ideas analyzer - extracts top 3 money-making ideas from news."""
 
-import asyncio
 import json
 from typing import List, Dict
-from gigachat import GigaChat
+from openai import AsyncOpenAI
 import config
 import database
 
-# GigaChat pricing (бесплатно для физических лиц)
-PRICE_INPUT_PER_1M = 0.0
-PRICE_OUTPUT_PER_1M = 0.0
+# GPT-4o mini pricing
+PRICE_INPUT_PER_1M = 0.15
+PRICE_OUTPUT_PER_1M = 0.60
 
 
 def calculate_cost(input_tokens: int, output_tokens: int) -> float:
@@ -17,25 +16,16 @@ def calculate_cost(input_tokens: int, output_tokens: int) -> float:
            (output_tokens / 1_000_000) * PRICE_OUTPUT_PER_1M
 
 
-def get_gigachat_client() -> GigaChat:
-    """Get or create GigaChat client."""
-    return GigaChat(
-        credentials=config.GIGACHAT_CREDENTIALS,
-        scope="GIGACHAT_API_PERS",
-        verify_ssl_certs=False,
-        model="GigaChat"
-    )
-
-
 async def analyze_business_ideas(news_items: List[Dict]) -> str:
     """Analyze news and extract top 3 business ideas."""
 
-    if not config.GIGACHAT_CREDENTIALS or not news_items:
+    if not config.OPENAI_API_KEY or not news_items:
         return None
 
+    # Prepare news summary for analysis
     news_summary = "\n\n".join([
         f"**{item.get('title_ru', item.get('title', ''))}**\n{item.get('description_ru', item.get('description', ''))}"
-        for item in news_items[:20]
+        for item in news_items[:20]  # Limit to top 20 for context
     ])
 
     prompt = f"""Проанализируй эти AI-новости и выбери 3 самые перспективные бизнес-идеи, на которых можно заработать.
@@ -49,6 +39,12 @@ async def analyze_business_ideas(news_items: List[Dict]) -> str:
 3. Почему выстрелит: почему это актуально и востребовано прямо сейчас
 4. Как заработать: конкретная модель монетизации
 5. Первый шаг: что сделать уже сегодня, чтобы начать
+
+Фокусируйся на:
+- Идеях, которые можно реализовать быстро (недели, не месяцы)
+- Низкий порог входа (минимум вложений)
+- Реальный спрос (люди готовы платить)
+- Тренды, которые только набирают обороты
 
 Формат ответа - строго JSON:
 {{
@@ -64,20 +60,32 @@ async def analyze_business_ideas(news_items: List[Dict]) -> str:
 }}"""
 
     try:
-        client = get_gigachat_client()
-
-        response = await asyncio.to_thread(
-            client.chat,
-            prompt
+        client = AsyncOpenAI(
+            api_key=config.OPENAI_API_KEY,
+            base_url=config.OPENAI_BASE_URL or "https://api.openai.com/v1"
+        )
+        response = await client.chat.completions.create(
+            model="deepseek/deepseek-r1",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Ты опытный предприниматель и аналитик AI-рынка. Ты умеешь находить золотые возможности в новостях и превращать их в бизнес-идеи. Отвечай только на русском языке. Отвечай строго в JSON формате."
+                },
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=2000,
+            temperature=0.7
         )
 
         result = response.choices[0].message.content.strip()
 
-        input_tokens = len(prompt.split()) * 2
-        output_tokens = len(result.split()) * 2
-        cost = calculate_cost(input_tokens, output_tokens)
-        await database.log_token_usage(input_tokens, output_tokens, cost)
+        # Track tokens
+        usage = response.usage
+        if usage:
+            cost = calculate_cost(usage.prompt_tokens, usage.completion_tokens)
+            await database.log_token_usage(usage.prompt_tokens, usage.completion_tokens, cost)
 
+        # Parse and format
         data = json.loads(result)
         return format_ideas_message(data.get("ideas", []))
 
