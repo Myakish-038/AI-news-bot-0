@@ -23,7 +23,7 @@ def get_gigachat_client() -> GigaChat:
         credentials=config.GIGACHAT_CREDENTIALS,
         scope="GIGACHAT_API_PERS",
         verify_ssl_certs=False,
-        model="GigaChat-3.5-Ultra"
+        model="GigaChat"
     )
 
 
@@ -33,10 +33,9 @@ async def analyze_business_ideas(news_items: List[Dict]) -> str:
     if not config.GIGACHAT_CREDENTIALS or not news_items:
         return None
 
-    # Prepare news summary for analysis
     news_summary = "\n\n".join([
         f"**{item.get('title_ru', item.get('title', ''))}**\n{item.get('description_ru', item.get('description', ''))}"
-        for item in news_items[:20]  # Limit to top 20 for context
+        for item in news_items[:20]
     ])
 
     prompt = f"""Проанализируй эти AI-новости и выбери 3 самые перспективные бизнес-идеи, на которых можно заработать.
@@ -50,12 +49,6 @@ async def analyze_business_ideas(news_items: List[Dict]) -> str:
 3. Почему выстрелит: почему это актуально и востребовано прямо сейчас
 4. Как заработать: конкретная модель монетизации
 5. Первый шаг: что сделать уже сегодня, чтобы начать
-
-Фокусируйся на:
-- Идеях, которые можно реализовать быстро (недели, не месяцы)
-- Низкий порог входа (минимум вложений)
-- Реальный спрос (люди готовы платить)
-- Тренды, которые только набирают обороты
 
 Формат ответа - строго JSON:
 {{
@@ -73,7 +66,6 @@ async def analyze_business_ideas(news_items: List[Dict]) -> str:
     try:
         client = get_gigachat_client()
 
-        # GigaChat не поддерживает асинхронные вызовы, используем to_thread
         response = await asyncio.to_thread(
             client.chat,
             prompt
@@ -81,13 +73,11 @@ async def analyze_business_ideas(news_items: List[Dict]) -> str:
 
         result = response.choices[0].message.content.strip()
 
-        # Примерный подсчет токенов (GigaChat не возвращает точное количество)
         input_tokens = len(prompt.split()) * 2
         output_tokens = len(result.split()) * 2
         cost = calculate_cost(input_tokens, output_tokens)
         await database.log_token_usage(input_tokens, output_tokens, cost)
 
-        # Парсим JSON
         data = json.loads(result)
         return format_ideas_message(data.get("ideas", []))
 
