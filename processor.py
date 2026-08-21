@@ -197,7 +197,7 @@ async def process_news() -> List[Dict]:
     print(f"Limited to: {len(limited_news)} items")
 
     # Step 7: Translate
-    if config.OPENAI_API_KEY:
+    if config.GIGACHAT_CREDENTIALS:
         print("Translating news...")
         translated_news = await translate_batch(limited_news)
         print(f"Translated: {len(translated_news)} items")
