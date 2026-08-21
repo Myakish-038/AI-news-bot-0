@@ -46,8 +46,8 @@ async def send_daily_digest():
         if news_success:
             print(f"News sent: {len(news_items)} items")
 
-        # 2. Analyze and send BUSINESS IDEAS via second bot (if GigaChat is configured)
-        if config.GIGACHAT_CREDENTIALS:
+        # 2. Analyze and send BUSINESS IDEAS via second bot (if OpenAI is configured)
+        if config.OPENAI_API_KEY:
             print("Analyzing business ideas...")
             ideas_message = await analyze_business_ideas(news_items)
             if ideas_message:
@@ -58,7 +58,7 @@ async def send_daily_digest():
             else:
                 print("No business ideas generated")
         else:
-            print("GigaChat not configured - skipping business ideas")
+            print("OpenAI not configured - skipping business ideas")
 
         # Cleanup old records
         await database.cleanup_old_news(days=30)
@@ -82,8 +82,8 @@ async def run_with_scheduler():
         print("ERROR: TELEGRAM_CHAT_ID not set")
         sys.exit(1)
 
-    if not config.GIGACHAT_CREDENTIALS:
-        print("WARNING: GIGACHAT_CREDENTIALS not set - translations and ideas will be skipped")
+    if not config.OPENAI_API_KEY:
+        print("WARNING: OPENAI_API_KEY not set - translations and ideas will be skipped")
 
     # Initialize database
     await database.init_db()
@@ -213,10 +213,6 @@ def main():
         asyncio.run(run_bot_only())
     else:
         asyncio.run(run_with_scheduler())
-
-
-if __name__ == "__main__":
-    main()
 
 
 if __name__ == "__main__":
