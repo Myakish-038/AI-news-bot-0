@@ -29,7 +29,7 @@ def get_client() -> GigaChat:
             credentials=config.GIGACHAT_CREDENTIALS,
             scope="GIGACHAT_API_PERS",
             verify_ssl_certs=False,
-            model="GigaChat-3.5-Ultra"
+            model="GigaChat"
         )
     return client
 
@@ -38,7 +38,6 @@ async def translate_and_summarize(news_item: Dict) -> Dict:
     """Translate title and create a brief Russian summary."""
 
     if not config.GIGACHAT_CREDENTIALS:
-        # Если нет ключа, возвращаем оригинал
         return news_item
 
     title = news_item.get("title", "")
@@ -57,7 +56,6 @@ async def translate_and_summarize(news_item: Dict) -> Dict:
     try:
         gigachat_client = get_client()
 
-        # GigaChat не поддерживает асинхронные вызовы, поэтому используем to_thread
         response = await asyncio.to_thread(
             gigachat_client.chat,
             prompt
@@ -65,13 +63,11 @@ async def translate_and_summarize(news_item: Dict) -> Dict:
 
         result = response.choices[0].message.content.strip()
 
-        # Примерный подсчет токенов (GigaChat не возвращает точное количество)
         input_tokens = len(prompt.split()) * 2
         output_tokens = len(result.split()) * 2
         cost = calculate_cost(input_tokens, output_tokens)
         await database.log_token_usage(input_tokens, output_tokens, cost)
 
-        # Парсим ответ
         lines = result.split("\n")
         translated_title = title
         translated_description = description
@@ -114,7 +110,6 @@ async def translate_batch(news_items: List[Dict], batch_size: int = 5) -> List[D
             elif isinstance(result, Exception):
                 print(f"Translation batch error: {result}")
 
-        # Небольшая задержка между батчами
         if i + batch_size < len(news_items):
             await asyncio.sleep(0.5)
 
