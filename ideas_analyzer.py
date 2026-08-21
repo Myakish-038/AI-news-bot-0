@@ -1,14 +1,15 @@
 """Business ideas analyzer - extracts top 3 money-making ideas from news."""
 
+import asyncio
 import json
 from typing import List, Dict
-from openai import AsyncOpenAI
+from gigachat import GigaChat
 import config
 import database
 
-# GPT-4o mini pricing
-PRICE_INPUT_PER_1M = 0.15
-PRICE_OUTPUT_PER_1M = 0.60
+# GigaChat pricing (бесплатно для физических лиц)
+PRICE_INPUT_PER_1M = 0.0
+PRICE_OUTPUT_PER_1M = 0.0
 
 
 def calculate_cost(input_tokens: int, output_tokens: int) -> float:
@@ -16,10 +17,20 @@ def calculate_cost(input_tokens: int, output_tokens: int) -> float:
            (output_tokens / 1_000_000) * PRICE_OUTPUT_PER_1M
 
 
+def get_gigachat_client() -> GigaChat:
+    """Get or create GigaChat client."""
+    return GigaChat(
+        credentials=config.GIGACHAT_CREDENTIALS,
+        scope="GIGACHAT_API_PERS",
+        verify_ssl_certs=False,
+        model="GigaChat-3.5-Ultra"
+    )
+
+
 async def analyze_business_ideas(news_items: List[Dict]) -> str:
     """Analyze news and extract top 3 business ideas."""
 
-    if not config.OPENAI_API_KEY or not news_items:
+    if not config.GIGACHAT_CREDENTIALS or not news_items:
         return None
 
     # Prepare news summary for analysis
@@ -60,30 +71,24 @@ async def analyze_business_ideas(news_items: List[Dict]) -> str:
 }}"""
 
     try:
-        client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
-        response = await client.chat.completions.create(
-            model=config.OPENAI_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "Ты опытный предприниматель и аналитик AI-рынка. Ты умеешь находить золотые возможности в новостях и превращать их в бизнес-идеи. Отвечай только на русском языке. Отвечай строго в JSON формате."
-                },
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=2000,
-            temperature=0.7,
-            response_format={"type": "json_object"}
+        client = get_gigachat_client()
+
+        # GigaChat не поддерживает асинхронные вызовы, используем to_thread
+        response = await asyncio.to_thread(
+            client.chat,
+            prompt,
+            model="GigaChat-3.5-Ultra"
         )
 
         result = response.choices[0].message.content.strip()
 
-        # Track tokens
-        usage = response.usage
-        if usage:
-            cost = calculate_cost(usage.prompt_tokens, usage.completion_tokens)
-            await database.log_token_usage(usage.prompt_tokens, usage.completion_tokens, cost)
+        # Примерный подсчет токенов (GigaChat не возвращает точное количество)
+        input_tokens = len(prompt.split()) * 2
+        output_tokens = len(result.split()) * 2
+        cost = calculate_cost(input_tokens, output_tokens)
+        await database.log_token_usage(input_tokens, output_tokens, cost)
 
-        # Parse and format
+        # Парсим JSON
         data = json.loads(result)
         return format_ideas_message(data.get("ideas", []))
 
